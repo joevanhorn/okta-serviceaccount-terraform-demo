@@ -67,6 +67,15 @@ resource "okta_user" "monitoring_service_account" {
   status = "ACTIVE"
 }
 
+# Example Service Account 4: nhi-demo
+resource "okta_user" "nhi-demo" {
+  first_name = "NHI Demo"
+  last_name  = "Service Account"
+  login      = "nhi-demo@${var.okta_org_name}.com"
+  email      = "nhi-demo@${var.okta_org_name}.com"
+  
+  status = "ACTIVE"
+}
 
 resource "okta_group_memberships" "monitoring_service_membership" {
   group_id = okta_group.service_accounts.id
