@@ -1,5 +1,5 @@
 # .github/workflows/terraform-destroy-pr.yml
-# Alternative: Trigger destroy via a special PR file
+# Trigger destroy via a special PR file
 
 name: Terraform Destroy via PR
 
@@ -7,14 +7,10 @@ on:
   pull_request:
     branches:
       - main
-    paths:
-      - 'DESTROY.trigger'
   
   push:
     branches:
       - main
-    paths:
-      - 'DESTROY.trigger'
 
 jobs:
   destroy-check:
@@ -26,20 +22,31 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       
-      - name: Verify Destroy Request
+      - name: Check for Destroy Trigger
+        id: check
         run: |
           if [ -f "DESTROY.trigger" ]; then
-            echo "⚠️ **WARNING: This PR will DESTROY all Okta resources!**" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "Resources to be destroyed:" >> $GITHUB_STEP_SUMMARY
-            echo "- All service account users" >> $GITHUB_STEP_SUMMARY
-            echo "- Service accounts group" >> $GITHUB_STEP_SUMMARY
-            echo "- All group memberships" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "⚠️ This action is IRREVERSIBLE!" >> $GITHUB_STEP_SUMMARY
+            echo "found=true" >> $GITHUB_OUTPUT
+            echo "✅ DESTROY.trigger detected"
+          else
+            echo "found=false" >> $GITHUB_OUTPUT
+            echo "ℹ️ No DESTROY.trigger - normal PR"
           fi
       
+      - name: Verify Destroy Request
+        if: steps.check.outputs.found == 'true'
+        run: |
+          echo "⚠️ **WARNING: This PR will DESTROY all Okta resources!**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Resources to be destroyed:" >> $GITHUB_STEP_SUMMARY
+          echo "- All service account users" >> $GITHUB_STEP_SUMMARY
+          echo "- Service accounts group" >> $GITHUB_STEP_SUMMARY
+          echo "- All group memberships" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "⚠️ This action is IRREVERSIBLE!" >> $GITHUB_STEP_SUMMARY
+      
       - name: Comment on PR
+        if: steps.check.outputs.found == 'true'
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -60,13 +67,13 @@ jobs:
               ### ⚠️ THIS ACTION IS IRREVERSIBLE ⚠️
               
               **Before merging:**
-              1. Verify this is intentional
-              2. Backup any necessary data
-              3. Get approval from required stakeholders
-              4. Understand that resources will be permanently deleted
+              1. ✅ Verify this is intentional
+              2. ✅ Backup any necessary data
+              3. ✅ Get approval from required stakeholders
+              4. ✅ Understand that resources will be permanently deleted
               
-              To proceed: Merge this PR
-              To cancel: Close this PR without merging`
+              **To proceed:** Merge this PR
+              **To cancel:** Close this PR without merging`
             })
 
   terraform-destroy:
@@ -77,16 +84,33 @@ jobs:
     environment:
       name: production-destroy
     
+    permissions:
+      contents: write
+    
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       
+      - name: Check for Destroy Trigger
+        id: check_trigger
+        run: |
+          if [ -f "DESTROY.trigger" ]; then
+            echo "trigger_exists=true" >> $GITHUB_OUTPUT
+            echo "✅ DESTROY.trigger file found - proceeding with destroy"
+            cat DESTROY.trigger
+          else
+            echo "trigger_exists=false" >> $GITHUB_OUTPUT
+            echo "ℹ️ No DESTROY.trigger file - skipping destroy"
+          fi
+      
       - name: Setup Terraform
+        if: steps.check_trigger.outputs.trigger_exists == 'true'
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: '1.6.0'
       
       - name: Terraform Init
+        if: steps.check_trigger.outputs.trigger_exists == 'true'
         run: terraform init
         working-directory: ./terraform
         env:
@@ -95,26 +119,46 @@ jobs:
           OKTA_API_TOKEN: ${{ secrets.OKTA_API_TOKEN }}
       
       - name: Terraform Destroy
+        if: steps.check_trigger.outputs.trigger_exists == 'true'
         run: |
+          echo "🗑️ Starting Terraform destroy..."
           terraform destroy -auto-approve -input=false \
             -var="okta_org_name=${{ secrets.OKTA_ORG_NAME }}" \
             -var="okta_base_url=${{ secrets.OKTA_BASE_URL }}" \
             -var="okta_api_token=${{ secrets.OKTA_API_TOKEN }}"
+          echo "✅ Terraform destroy completed"
         working-directory: ./terraform
       
       - name: Remove Trigger File
+        if: steps.check_trigger.outputs.trigger_exists == 'true'
         run: |
+          echo "🧹 Removing DESTROY.trigger file..."
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git rm DESTROY.trigger
-          git commit -m "Remove DESTROY.trigger after successful destroy"
+          git commit -m "chore: Remove DESTROY.trigger after successful destroy"
           git push
+          echo "✅ Trigger file removed"
       
       - name: Create Summary
+        if: steps.check_trigger.outputs.trigger_exists == 'true'
         run: |
-          echo "### ⚠️ Terraform Destroy Completed" >> $GITHUB_STEP_SUMMARY
+          echo "### ⚠️ Terraform Destroy Completed Successfully" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**All Okta resources have been permanently deleted**" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- ✗ Service account users removed" >> $GITHUB_STEP_SUMMARY
+          echo "- ✗ Service accounts group removed" >> $GITHUB_STEP_SUMMARY
+          echo "- ✗ Group memberships removed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Destroyed by:** @${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
           echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Timestamp:** $(date -u)" >> $GITHUB_STEP_SUMMARY
+      
+      - name: No Destroy Trigger Found
+        if: steps.check_trigger.outputs.trigger_exists == 'false'
+        run: |
+          echo "### ℹ️ No Destroy Request" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "This was a normal push to main - no DESTROY.trigger file detected" >> $GITHUB_STEP_SUMMARY
+          echo "No resources were destroyed." >> $GITHUB_STEP_SUMMARY
