@@ -1,5 +1,5 @@
 # GitHub Actions Workflow for Terraform Okta Management
-# .github/workflows/terraform-okta.yml
+# Save this file as: .github/workflows/terraform-okta.yml
 
 name: Terraform Okta Management
 
@@ -137,8 +137,10 @@ jobs:
   terraform-apply:
     name: Terraform Apply
     runs-on: ubuntu-latest
-    # Only run on push to main or manual apply
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply')
+    # Only run on push to main or manual apply from main branch
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') || 
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply' && github.ref == 'refs/heads/main')
     
     environment:
       name: production
@@ -192,8 +194,8 @@ jobs:
   terraform-destroy:
     name: Terraform Destroy
     runs-on: ubuntu-latest
-    # Only run on manual destroy
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy'
+    # Only run on manual destroy from main branch
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy' && github.ref == 'refs/heads/main'
     
     environment:
       name: production-destroy
