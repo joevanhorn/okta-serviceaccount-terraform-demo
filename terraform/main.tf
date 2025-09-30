@@ -67,15 +67,6 @@ resource "okta_user" "monitoring_service_account" {
   status = "ACTIVE"
 }
 
-# Example Service Account 1: API Integration
-resource "okta_user" "demo_NHI" {
-  first_name = "Demo NHI"
-  last_name  = "Service Account"
-  login      = "demo-nhi@${var.okta_org_name}.com"
-  email      = "demo-nhi@${var.okta_org_name}.com"
-  
-  status = "ACTIVE"
-}
 
 resource "okta_group_memberships" "monitoring_service_membership" {
   group_id = okta_group.service_accounts.id
