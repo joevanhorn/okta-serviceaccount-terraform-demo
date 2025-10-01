@@ -77,6 +77,16 @@ resource "okta_user" "nhi-demo" {
   status = "ACTIVE"
 }
 
+# Example Service Account 5: nhi-POC-Wednesday
+resource "okta_user" "nhi-wednesday" {
+  first_name = "NHI Wednesday"
+  last_name  = "Service Account"
+  login      = "nhi-wednesday@${var.okta_org_name}.com"
+  email      = "nhi-wednesday@${var.okta_org_name}.com"
+  
+  status = "ACTIVE"
+}
+
 resource "okta_group_memberships" "monitoring_service_membership" {
   group_id = okta_group.service_accounts.id
   users = [
