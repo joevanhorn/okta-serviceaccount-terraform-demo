@@ -77,6 +77,13 @@ resource "okta_user" "nhi-demo" {
   status = "ACTIVE"
 }
 
+resource "okta_group_memberships" "nhi_demo_service_membership" {
+  group_id = okta_group.service_accounts.id
+  users = [
+    okta_user.nhi-demo.id,
+  ]
+}
+
 # Example Service Account 5: nhi-POC-Wednesday
 resource "okta_user" "nhi-wednesday" {
   first_name = "NHI Wednesday"
